@@ -11,6 +11,9 @@ class CryptoWorker(threading.Thread):
         self.shutdown = False
         self.client = client
 
+    def get_thread_name(self):
+        return threading.current_thread().getName()
+
     def get_remaining_message_count(self):
         self.msg_lock.acquire()
         count = len(self.msg_queue)

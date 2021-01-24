@@ -140,12 +140,12 @@ def calculate_rsi(df):
     decrease = [0]
 
     for i in range(len(close_data)-1):
-        change = close_data[i+1]-close_data[i]
+        change = Decimal(close_data[i+1]-close_data[i])
         if change >= 0:
             increase.append(change)
-            decrease.append(0)
+            decrease.append(Decimal(0))
         else:
-            increase.append(0)
+            increase.append(Decimal(0))
             decrease.append(-change)
 
     rsi_df.loc[period-1, 'rsi_gains'] = Decimal(np.mean([x for x in increase[:period]]))
@@ -156,7 +156,10 @@ def calculate_rsi(df):
         rsi_df.loc[i, 'rsi_losses'] = (rsi_df.loc[i-1, 'rsi_losses']*(period-1)+decrease[i])/period
 
     for i in range(len(rsi_df)):
-        rsi_df.loc[i, 'rsi'] = 100 - (100/(1+(rsi_df.loc[i, 'rsi_gains']/rsi_df.loc[i, 'rsi_losses'])))
+        if rsi_df.loc[i, 'rsi_losses'] == Decimal(0):
+            rsi_df.loc[i, 'rsi'] = Decimal(100)
+        else:
+            rsi_df.loc[i, 'rsi'] = Decimal(100 - (100/(1+(rsi_df.loc[i, 'rsi_gains']/rsi_df.loc[i, 'rsi_losses']))))
 
     drop_list = [i for i in range(len(rsi_df)) if rsi_df.loc[i, 'rsi'].is_nan()]
     rsi_df.drop(index=drop_list, inplace=True)

@@ -4,7 +4,7 @@ from crypto_worker import PriorityCryptoWorker
 from crypto_message import *
 from crypto_logger import logger
 
-MAX_INVESTMENT = 10'
+MAX_INVESTMENT = 10
 
 class ApiRequestManager(PriorityCryptoWorker):
 

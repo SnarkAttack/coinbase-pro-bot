@@ -7,21 +7,23 @@ from crypto_message import (
     AccountBalanceResponseMessage,
 )
 from time import sleep
-
-MAX_INVESTMENT = 10
+from utilities import FIAT_MARKETS
 
 class PortfolioManager(CryptoWorker):
 
     def __init__(self, key_file):
         super().__init__(self)
         self.client = ApiRequestManager(key_file)
-        self.client .start()
+        self.client.start()
         self.historical_data_monitors = []
 
     def initialize_portfolio_manager(self):
-        cm = CryptoMonitor(self.client, "ETH-USD", 3600)
-        cm.start()
-        self.historical_data_monitors.append(cm)
+        for crypto in FIAT_MARKETS:
+            pair = f"{crypto}-USD"
+            for granularity in [3600]:
+                cm = CryptoMonitor(self.client, pair, granularity)
+                cm.start()
+                self.historical_data_monitors.append(cm)
 
     def request_available_balance(self):
         msg = AccountBalanceRequestMessage(self, self.client)
@@ -41,8 +43,8 @@ class PortfolioManager(CryptoWorker):
 
     def run(self):
         logger.info(f"{self} starting")
-        #self.initialize_portfolio_manager()
-        self.request_available_balance()
+        self.initialize_portfolio_manager()
+        #self.request_available_balance()
         while not self.is_shutdown():
             self.process_messages()
             sleep(1)

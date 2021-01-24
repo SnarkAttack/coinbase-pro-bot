@@ -2,6 +2,7 @@ from time import sleep
 from datetime import datetime, timezone
 import dateutil.parser
 from decimal import Decimal
+import numpy as np
 
 from crypto_worker import CryptoWorker
 from crypto_message import (
@@ -38,8 +39,11 @@ class CryptoMonitor(CryptoWorker):
         self.granularity = granularity
         self.last_time = datetime.fromtimestamp(0, tz=timezone.utc)
         self.historical_df = None
-        self.state = STATE_SELL_INDICATED
+        self.state = STATE_DEFAULT
         self.owned_crypto_balance = Decimal(0)
+
+    def __str__(self):
+        return f"CryptoMonitor({self.get_thread_name()},{self.product_id},{self.granularity})"
 
     def round_down_time(self, t):
         return t.replace(microsecond=0, second=0, minute=0, tzinfo=timezone.utc)
@@ -81,10 +85,14 @@ class CryptoMonitor(CryptoWorker):
                     return 1
                 fresh_df = self.historical_df.copy(deep=True)
                 dt = dateutil.parser.isoparse(msg.data['time'])
-                d = "{:.2f}".format(value)
-                fresh_df.loc[len(fresh_df)] = [dt, 0, 0, 0, Decimal(d), 2)), 0]
+                d = "{:.2f}".format(float(msg.data['price']))
+                fresh_df.loc[len(fresh_df)] = [dt, 0, 0, 0, Decimal(d), 0]
                 df = gather_all_crypto_data(fresh_df)
-                #save_graphs(df)
+                z = np.polyfit(df.index, [float(x) for x in df.close], 1)
+                if Decimal(z[0])/Decimal(d) < Decimal(-0.0005):
+                    logger.warning(f"{self} has a significantly negative trend, "
+                                    f"avoiding this market for now")
+                    return
                 next_state = determine_next_state(df, self.state)
                 if next_state == STATE_BUY:
                     if self.owned_crypto_balance.compare(Decimal(0)) == Decimal(1):
