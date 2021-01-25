@@ -1,10 +1,53 @@
 from time import sleep
-import cbpro
+from cbpro import PublicClient, AuthenticatedClient, WebsocketClient
 from crypto_worker import PriorityCryptoWorker
 from crypto_message import *
 from crypto_logger import logger
 
 MAX_INVESTMENT = 10
+
+
+class APIRequestManager(PriorityCryptoWorker):
+
+    def __init__(self):
+        super().__init__()
+        self.client = None
+
+
+class PublicAPIRequestManager(APIRequestManager):
+
+    def __init__(self):
+        super().__init__()
+
+    def initialize_client(self):
+        self.client = PublicClient()
+
+
+class AuthenitcatedAPIRequestManager(APIRequestManager):
+
+    def __init__(self):
+        super().__init__()
+
+    def load_keys_from_file(self, key_file):
+        with open(key_file, 'r') as f:
+            lines = f.readlines()
+            [self.key, self.b64secret, self.passphrase] = [x.strip() for x in lines][:3]
+
+    def initialize_client(self):
+        self.client = AuthenticatedClient(
+            self.key,
+            self.b64secret,
+            self.passphrase
+        )
+
+class WebsocketManager(APIRequestManager):
+
+    def __init__(self):
+        super().__init__()
+
+    def initialize_client(self):
+        self.client = WebsocketClient
+
 
 class ApiRequestManager(PriorityCryptoWorker):
 
