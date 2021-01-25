@@ -1,8 +1,9 @@
 from time import sleep
 from cbpro import PublicClient, AuthenticatedClient, WebsocketClient
-from crypto_worker import PriorityCryptoWorker
-from crypto_message import *
-from crypto_logger import logger
+from .crypto_worker import PriorityCryptoWorker
+from .crypto_message import *
+from .crypto_logger import logger
+import simplejson as json
 
 MAX_INVESTMENT = 10
 
@@ -13,20 +14,23 @@ class APIRequestManager(PriorityCryptoWorker):
         super().__init__()
         self.client = None
 
-
 class PublicAPIRequestManager(APIRequestManager):
 
     def __init__(self):
         super().__init__()
+        self.initialize_client()
 
     def initialize_client(self):
         self.client = PublicClient()
 
 
-class AuthenitcatedAPIRequestManager(APIRequestManager):
+class AuthenticatedAPIRequestManager(APIRequestManager):
 
-    def __init__(self):
+    def __init__(self, key_file=None):
         super().__init__()
+        if key_file is not None:
+            self.load_keys_from_file(key_file)
+            self.initialize_client()
 
     def load_keys_from_file(self, key_file):
         with open(key_file, 'r') as f:
@@ -40,13 +44,32 @@ class AuthenitcatedAPIRequestManager(APIRequestManager):
             self.passphrase
         )
 
+
+class TickerParserWebsocketClient(WebsocketClient):
+
+    def __init__(self, products=None):
+        super().__init__(products, channels=["ticker"])
+
+    def on_open(self):
+        logger.info("Websocket subscribed")
+
+    def on_message(self, msg):
+        print(json.dumps(msg, indent=4, sort_keys=True))
+
+    def on_close(self):
+        logger.info("Websocket closed")
+
+
 class WebsocketManager(APIRequestManager):
 
     def __init__(self):
         super().__init__()
+        self.initialize_client()
 
-    def initialize_client(self):
-        self.client = WebsocketClient
+    def initialize_client(self, products=None):
+        self.client = TickerParserWebsocketClient(
+            products=products
+        )
 
 
 class ApiRequestManager(PriorityCryptoWorker):
@@ -67,7 +90,7 @@ class ApiRequestManager(PriorityCryptoWorker):
             [self.key, self.b64secret, self.passphrase] = [x.strip() for x in lines][:3]
 
     def initialize_client(self):
-        self.client = cbpro.AuthenticatedClient(
+        self.client = AuthenticatedClient(
             self.key,
             self.b64secret,
             self.passphrase

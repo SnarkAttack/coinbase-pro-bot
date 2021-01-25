@@ -1,19 +1,20 @@
-from crypto_worker import CryptoWorker
-from api_request_manager import ApiRequestManager
-from crypto_monitor import CryptoMonitor
-from crypto_logger import logger
-from crypto_message import (
+from .crypto_worker import CryptoWorker
+from .api_request_manager import AuthenticatedAPIRequestManager
+from .crypto_monitor import CryptoMonitor
+from .crypto_logger import logger
+from .crypto_message import (
     AccountBalanceRequestMessage,
     AccountBalanceResponseMessage,
 )
 from time import sleep
 from utilities import FIAT_MARKETS
 
+
 class PortfolioManager(CryptoWorker):
 
     def __init__(self, key_file):
         super().__init__(self)
-        self.client = ApiRequestManager(key_file)
+        self.client = AuthenticatedAPIRequestManager(key_file)
         self.client.start()
         self.historical_data_monitors = []
 

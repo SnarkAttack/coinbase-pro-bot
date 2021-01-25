@@ -1,19 +1,22 @@
 import sys
 import threading
-from api_request_manager import ApiRequestManager
-from cbpro import PublicClient, AuthenticatedClient, WebsocketClient
+from api_request_manager import PublicAPIRequestManager, WebsocketManager
+from portfolio_manager import PortfolioManager
+
 
 class CoinbaseProBot(threading.Thread):
 
     def __init__(self):
         super().__init__(self)
-        self.client = ApiRequestManager()
+        self.public_client = PublicAPIRequestManager()
+        self.websocket_client = WebsocketManager(products=['ETH-USD'])
+        self.portfolios = []
 
     def shutdown(self):
         pass
 
     def load_portfolio(self, key_file):
-        pass
+        self.portfolios = PortfolioManager(key_file)
 
     def process_command(self, cmd):
         cmd_args = cmd.split(' ')

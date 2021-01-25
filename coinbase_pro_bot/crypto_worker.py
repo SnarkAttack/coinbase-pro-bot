@@ -1,15 +1,14 @@
 import threading
-from crypto_logger import logger
+from .crypto_logger import logger
 
 
 class CryptoWorker(threading.Thread):
 
-    def __init__(self, client):
+    def __init__(self):
         super().__init__()
         self.msg_queue = []
         self.msg_lock = threading.Lock()
         self.shutdown = False
-        self.client = client
 
     def get_thread_name(self):
         return threading.current_thread().getName()
@@ -22,7 +21,7 @@ class CryptoWorker(threading.Thread):
 
     def add_message_to_queue(self, msg):
         self.msg_lock.acquire()
-        logger.info(msg)
+        logger.debug(msg)
         self.msg_queue.append(msg)
         self.msg_lock.release()
 
@@ -43,14 +42,14 @@ class CryptoWorker(threading.Thread):
 
 class PriorityCryptoWorker(CryptoWorker):
 
-    def __init__(self, client):
-        super().__init__(client)
+    def __init__(self):
+        super().__init__()
         self.priority_msg_queue = []
         self.priority_msg_lock = threading.Lock()
 
     def add_message_to_priority_queue(self, msg):
         self.priority_msg_lock.acquire()
-        logger.info(f"PRIORITY: {msg}")
+        logger.debug(f"PRIORITY: {msg}")
         self.priority_msg_queue.append(msg)
         self.priority_msg_lock.release()
 
