@@ -1,0 +1,9 @@
+env/
+logs/
+market_data/
+*.pyc
+*.key
+*.png
+tests/
+*.txt
+old/
