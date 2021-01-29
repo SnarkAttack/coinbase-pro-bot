@@ -2,7 +2,7 @@ from decimal import Decimal
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
-from utilities import (
+from .utilities import (
     STATE_DEFAULT,
     STATE_OVERBOUGHT,
     STATE_OVERSOLD,
@@ -13,7 +13,7 @@ from utilities import (
     RSI_OVERBOUGHT_THRESHOLD,
     RSI_OVERSOLD_THRESHOLD,
 )
-from crypto_logger import logger
+from .crypto_logger import logger
 
 
 def datetime_from_timestamp(ts_str):

@@ -1,11 +1,22 @@
 from time import sleep
 from cbpro import PublicClient, AuthenticatedClient, WebsocketClient
 from .crypto_worker import PriorityCryptoWorker
-from .crypto_message import *
+from .crypto_message import (
+    HistoricalDataRequestMessage,
+    HistoricalDataResponseMessage,
+    ProductTickerResponseMessage,
+    AccountBalanceRequestMessage,
+    AccountBalanceResponseMessage,
+    BuyOrderRequestMessage,
+    SellOrderRequestMessage,
+)
 from .crypto_logger import logger
 import simplejson as json
+from datetime import datetime, timezone, timedelta
+import dateutil.parser
 
 MAX_INVESTMENT = 10
+TICKER_UPDATE_INTERVAL = 30
 
 
 class APIRequestManager(PriorityCryptoWorker):
@@ -13,6 +24,38 @@ class APIRequestManager(PriorityCryptoWorker):
     def __init__(self):
         super().__init__()
         self.client = None
+        self.subscriptors = []
+
+    def add_subscriptor(self, subscriptor):
+        self.subscriptors.append(subscriptor)
+
+    def add_subscriptors(self, subscriptors):
+        for subscriptor in subscriptors:
+            self.add_subscriptor(subscriptor)
+
+    def remove_subscriptor(self, subscriptor):
+        self.subscriptors.remove(subscriptor)
+
+    def remove_subscriptors(self, subscriptors):
+        for subscriptor in subscriptors:
+            self.remove_subscriptor(subscriptor)
+
+    def get_interested_subscriptors(self, interest_cond):
+        interested_subscriptors = []
+        for subscriptor in self.subscriptors:
+            if interest_cond(subscriptor):
+                interested_subscriptors.append(subscriptor)
+        return interested_subscriptors
+
+    def get_next_message(self):
+        msg = self.get_next_message_from_priority_queue()
+        if msg is None:
+            msg = self.get_next_message_from_queue()
+        return msg
+
+    def shutdown_client(self):
+        self.client = None
+
 
 class PublicAPIRequestManager(APIRequestManager):
 
@@ -22,6 +65,38 @@ class PublicAPIRequestManager(APIRequestManager):
 
     def initialize_client(self):
         self.client = PublicClient()
+
+    def process_historical_data_request(self, msg):
+
+        historical_data = self.client.get_product_historic_rates(
+            msg.product_id,
+            start=msg.start,
+            end=msg.end,
+            granularity=msg.granularity
+        )
+
+        response_msg = HistoricalDataResponseMessage(
+            msg.recipient,
+            msg.sender,
+            historical_data
+        )
+        msg.sender.add_message_to_queue(response_msg)
+
+    def process_next_message(self):
+        msg = self.get_next_message()
+        if msg is not None:
+            if isinstance(msg, HistoricalDataRequestMessage):
+                self.process_historical_data_request(msg)
+            else:
+                logger.error(f"Unexpected {msg.__class__.__name__} received "
+                             f"by {self}")
+
+    def run(self):
+        logger.info(f"{self} starting")
+        while not self.is_shutdown():
+            self.process_next_message()
+            sleep(1/3)
+        logger.info("DONE")
 
 
 class AuthenticatedAPIRequestManager(APIRequestManager):
@@ -44,94 +119,6 @@ class AuthenticatedAPIRequestManager(APIRequestManager):
             self.passphrase
         )
 
-
-class TickerParserWebsocketClient(WebsocketClient):
-
-    def __init__(self, products=None):
-        super().__init__(products, channels=["ticker"])
-
-    def on_open(self):
-        logger.info("Websocket subscribed")
-
-    def on_message(self, msg):
-        print(json.dumps(msg, indent=4, sort_keys=True))
-
-    def on_close(self):
-        logger.info("Websocket closed")
-
-
-class WebsocketManager(APIRequestManager):
-
-    def __init__(self):
-        super().__init__()
-        self.initialize_client()
-
-    def initialize_client(self, products=None):
-        self.client = TickerParserWebsocketClient(
-            products=products
-        )
-
-
-class ApiRequestManager(PriorityCryptoWorker):
-
-    def __init__(self, key_file):
-        super().__init__(self)
-        self.key = None
-        self.b64secret = None
-        self.passphrase = None
-        self.client = None
-
-        self.load_keys_from_file(key_file)
-        self.initialize_client()
-
-    def load_keys_from_file(self, key_file):
-        with open(key_file, 'r') as f:
-            lines = f.readlines()
-            [self.key, self.b64secret, self.passphrase] = [x.strip() for x in lines][:3]
-
-    def initialize_client(self):
-        self.client = AuthenticatedClient(
-            self.key,
-            self.b64secret,
-            self.passphrase
-        )
-
-    def get_next_message(self):
-        msg = self.get_next_message_from_priority_queue()
-        if msg is None:
-            msg = self.get_next_message_from_queue()
-        return msg
-
-    def process_historical_data_request(self, msg):
-
-        historical_data = self.client.get_product_historic_rates(
-            msg.product_id,
-            start=msg.start,
-            end=msg.end,
-            granularity=msg.granularity
-        )
-
-        response_msg = HistoricalDataResponseMessage(
-            msg.recipient,
-            msg.sender,
-            historical_data
-        )
-        msg.sender.add_message_to_queue(response_msg)
-
-    def process_product_ticker_request(self, msg):
-
-        product_ticker_data = self.client.get_product_ticker(
-            msg.product_id
-        )
-
-        response_msg = ProductTickerResponseMessage(
-            msg.recipient,
-            msg.sender,
-            product_ticker_data
-        )
-
-        msg.sender.add_message_to_queue(response_msg)
-
     def process_account_balance_request(self, msg):
 
         account_balance_data = self.client.get_accounts()
@@ -152,7 +139,7 @@ class ApiRequestManager(PriorityCryptoWorker):
             funds=MAX_INVESTMENT,
         )
 
-        logger.info(buy_order_response)
+        logger.info(json.dumps(buy_order_response, indent=4))
 
     def process_sell_order_request(self, msg):
 
@@ -162,14 +149,11 @@ class ApiRequestManager(PriorityCryptoWorker):
             size
         )
 
+        logger.info(json.dumps(sell_order_response, indent=4))
 
     def process_next_message(self):
         msg = self.get_next_message()
         if msg is not None:
-            if isinstance(msg, HistoricalDataRequestMessage):
-                self.process_historical_data_request(msg)
-            if isinstance(msg, ProductTickerRequestMessage):
-                self.process_product_ticker_request(msg)
             if isinstance(msg, AccountBalanceRequestMessage):
                 self.process_account_balance_request(msg)
             if isinstance(msg, BuyOrderRequestMessage):
@@ -181,6 +165,50 @@ class ApiRequestManager(PriorityCryptoWorker):
         logger.info(f"{self} starting")
         while not self.is_shutdown():
             self.process_next_message()
-            sleep(1/3)
+            sleep(1/5)
         logger.info("DONE")
 
+
+class TickerParserWebsocketClient(WebsocketClient):
+
+    def __init__(self, manager, products=None):
+        super().__init__(products=products, channels=["ticker"])
+        self.manager = manager
+        self.products = products
+        self.last_message_sent = {}
+        for product in products:
+            self.last_message_sent[product] = datetime.fromtimestamp(0, tz=timezone.utc)
+
+    def on_open(self):
+        logger.info("Websocket subscribed")
+
+    def on_message(self, msg):
+        if msg['type'] == 'ticker':
+            product_id = msg['product_id']
+            ts = dateutil.parser.isoparse(msg['time'])
+            if ts > self.last_message_sent[product_id] + timedelta(seconds=30):
+                self.last_message_sent[product_id] = ts
+                for sub in self.manager.get_interested_subscriptors(lambda x: x.product_id == product_id):
+                    resp_msg = ProductTickerResponseMessage(self.manager, sub, msg)
+                    sub.add_message_to_queue(resp_msg)
+
+    def on_close(self):
+        logger.info("Websocket closed")
+
+
+class WebsocketManager(APIRequestManager):
+
+    def __init__(self, products=None):
+        super().__init__()
+        self.initialize_client(self, products=products)
+
+    def initialize_client(self, manager, products=None):
+        self.client = TickerParserWebsocketClient(
+            manager,
+            products=products
+        )
+        self.client.start()
+
+    def shutdown_client(self):
+        self.client.close()
+        self.client = None

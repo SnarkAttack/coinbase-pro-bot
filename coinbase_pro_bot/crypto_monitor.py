@@ -4,8 +4,8 @@ import dateutil.parser
 from decimal import Decimal
 import numpy as np
 
-from crypto_worker import CryptoWorker
-from crypto_message import (
+from .crypto_worker import CryptoWorker
+from .crypto_message import (
     ShutdownMessage,
     HistoricalDataRequestMessage,
     HistoricalDataResponseMessage,
@@ -16,9 +16,9 @@ from crypto_message import (
     SellOrderRequestMessage,
     SellOrderResponseMessage,
 )
-from crypto_logger import logger
-from data_processing import gather_all_crypto_data, list_to_dataframe, determine_next_state, save_graphs
-from utilities import (
+from .crypto_logger import logger
+from .data_processing import gather_all_crypto_data, list_to_dataframe, determine_next_state, save_graphs
+from .utilities import (
     STATE_DEFAULT,
     STATE_OVERBOUGHT,
     STATE_OVERSOLD,
@@ -33,8 +33,9 @@ SLEEP_INTERVAL = 5
 
 class CryptoMonitor(CryptoWorker):
 
-    def __init__(self, client, product_id, granularity):
-        super().__init__(client)
+    def __init__(self, portfolio, product_id, granularity):
+        super().__init__()
+        self.portfolio = portfolio
         self.product_id = product_id
         self.granularity = granularity
         self.last_time = datetime.fromtimestamp(0, tz=timezone.utc)
@@ -55,19 +56,11 @@ class CryptoMonitor(CryptoWorker):
         if self.get_expected_last_time() > self.last_time:
             history_request_msg = HistoricalDataRequestMessage(
                 self,
-                self.client,
+                "PublicClient",
                 self.product_id,
                 granularity=self.granularity,
             )
-            self.client.add_message_to_queue(history_request_msg)
-
-        product_ticker_msg = ProductTickerRequestMessage(
-            self,
-            self.client,
-            self.product_id
-        )
-
-        self.client.add_message_to_queue(product_ticker_msg)
+            self.portfolio.add_message_to_public_client(history_request_msg)
 
     def process_message(self, msg):
         if msg is not None:
