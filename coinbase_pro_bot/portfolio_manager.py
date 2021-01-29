@@ -62,4 +62,13 @@ class PortfolioManager(CryptoWorker):
 
     def add_priority_message_to_authenticated_client(self, msg):
         self.client.add_message_to_priority_queue(msg)
+
+    def get_monitor_states(self):
+        return [(monitor.__str__(), monitor.state) for monitor in self.historical_data_monitors]
+
+    def get_monitor_rsi(self):
+        return [(monitor.__str__(), monitor.get_current_rsi()) for monitor in self.historical_data_monitors]
+
+    def get_monitor_macd_diff(self):
+        return [(monitor.__str__(), monitor.get_current_macd_diff()) for monitor in self.historical_data_monitors]
         

@@ -1,5 +1,5 @@
 from time import sleep
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import dateutil.parser
 from decimal import Decimal
 import numpy as np
@@ -17,7 +17,14 @@ from .crypto_message import (
     SellOrderResponseMessage,
 )
 from .crypto_logger import logger
-from .data_processing import gather_all_crypto_data, list_to_dataframe, determine_next_state, save_graphs
+from .data_processing import (
+    gather_all_crypto_data, 
+    list_to_dataframe, 
+    determine_next_state, 
+    save_graphs,
+    check_macd_diff,
+    check_rsi,
+)
 from .utilities import (
     STATE_DEFAULT,
     STATE_OVERBOUGHT,
@@ -42,6 +49,7 @@ class CryptoMonitor(CryptoWorker):
         self.historical_df = None
         self.state = STATE_DEFAULT
         self.owned_crypto_balance = Decimal(0)
+        self.last_ticker_df = None
 
     def __str__(self):
         return f"CryptoMonitor({self.get_thread_name()},{self.product_id},{self.granularity})"
@@ -53,7 +61,7 @@ class CryptoMonitor(CryptoWorker):
         return self.round_down_time(datetime.utcnow())
 
     def request_data(self):
-        if self.get_expected_last_time() > self.last_time:
+        if datetime.now(tz=timezone.utc) > self.last_time + timedelta(minutes=5):
             history_request_msg = HistoricalDataRequestMessage(
                 self,
                 "PublicClient",
@@ -62,27 +70,40 @@ class CryptoMonitor(CryptoWorker):
             )
             self.portfolio.add_message_to_public_client(history_request_msg)
 
+    def get_current_rsi(self):
+        if self.last_ticker_df is not None:
+            return self.last_ticker_df.loc[len(self.last_ticker_df)-1, 'rsi']
+        else:
+            return "Unavailable"
+
+    def get_current_macd(self):
+        if self.last_ticker_df is not None:
+            return self.last_ticker_df.loc[len(self.last_ticker_df)-1, 'macd']
+        else:
+            return "Unavailable"
+
+    def get_current_macd_diff(self):
+        if self.last_ticker_df is not None:
+            return self.last_ticker_df.loc[len(self.last_ticker_df)-1, 'macd']-self.last_ticker_df.loc[len(self.last_ticker_df)-1, 'macd_sig']
+        else:
+            return "Unavailable"
+
     def process_message(self, msg):
         if msg is not None:
             if isinstance(msg, HistoricalDataResponseMessage):
-                # Check if the most recent time is from after our last most recent
-                # If it is, build a new dataframe and save it. If not, we'll keep
-                # trying until it is
-                if datetime.fromtimestamp(msg.data[0][0], tz=timezone.utc) > self.last_time:
-                    self.historical_df = list_to_dataframe(msg.data)
-                    self.last_time = datetime.fromtimestamp(msg.data[0][0], tz=timezone.utc)
+                self.historical_df = list_to_dataframe(msg.data)
+                self.last_time = datetime.now(tz=timezone.utc)
             elif isinstance(msg, ProductTickerResponseMessage):
-                # Shouldn't ever get a response for this before a response for
-                # overall historical data
                 if self.historical_df is None:
-                    return 1
+                    return None
                 fresh_df = self.historical_df.copy(deep=True)
                 dt = dateutil.parser.isoparse(msg.data['time'])
                 d = "{:.2f}".format(float(msg.data['price']))
                 fresh_df.loc[len(fresh_df)] = [dt, 0, 0, 0, Decimal(d), 0]
                 df = gather_all_crypto_data(fresh_df)
+                self.last_ticker_df = df
                 z = np.polyfit(df.index, [float(x) for x in df.close], 1)
-                if Decimal(z[0])/Decimal(d) < Decimal(-0.0005):
+                if Decimal(z[0])/Decimal(d) < Decimal(-0.005):
                     logger.warning(f"{self} has a significantly negative trend, "
                                     f"avoiding this market for now")
                     return
