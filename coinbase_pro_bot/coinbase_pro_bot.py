@@ -3,7 +3,7 @@ import threading
 from .api_request_manager import PublicAPIRequestManager, WebsocketManager
 from .portfolio_manager import PortfolioManager
 
-PRODUCTS = [
+PRODUCTS = sorted([
     "BTC-USD",
     "ETH-USD",
     "LTC-USD",
@@ -41,7 +41,7 @@ PRODUCTS = [
     "GRT-USD",
     "BNT-USD",
     "SNX-USD"
-]
+])
 
 
 class CoinbaseProBot(threading.Thread):

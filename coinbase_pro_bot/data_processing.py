@@ -3,13 +3,14 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
 from .utilities import (
-    STATE_DEFAULT,
-    STATE_OVERBOUGHT,
+    STATE_NO_POSITION,
     STATE_OVERSOLD,
-    STATE_SELL_INDICATED,
     STATE_BUY_INDICATED,
-    STATE_SELL,
     STATE_BUY,
+    STATE_HOLDING,
+    STATE_OVERBOUGHT,
+    STATE_SELL_INDICATED,
+    STATE_SELL,
     RSI_OVERBOUGHT_THRESHOLD,
     RSI_OVERSOLD_THRESHOLD,
 )
@@ -57,28 +58,30 @@ def determine_next_state(df, curr_state):
 
     next_state = curr_state
 
-    if curr_state == STATE_DEFAULT:
+    if curr_state == STATE_NO_POSITION:
         rsi_val = check_rsi(df)
-        if rsi_val >= RSI_OVERBOUGHT_THRESHOLD:
-            next_state = STATE_OVERBOUGHT
-        elif rsi_val <= RSI_OVERSOLD_THRESHOLD:
+        if rsi_val <= RSI_OVERSOLD_THRESHOLD:
             next_state = STATE_OVERSOLD
-    elif curr_state == STATE_OVERBOUGHT:
-        rsi_val = check_rsi(df)
-        if rsi_val < RSI_OVERBOUGHT_THRESHOLD:
-            next_state = STATE_SELL_INDICATED
     elif curr_state == STATE_OVERSOLD:
         rsi_val = check_rsi(df)
         if rsi_val > RSI_OVERSOLD_THRESHOLD:
             next_state = STATE_BUY_INDICATED
-    elif curr_state == STATE_SELL_INDICATED:
-        macd_diff_val = check_macd_diff(df)
-        if macd_diff_val < 0:
-            next_state = STATE_SELL
     elif curr_state == STATE_BUY_INDICATED:
         macd_diff_val = check_macd_diff(df)
         if macd_diff_val > 0:
             next_state = STATE_BUY
+    elif curr_state == STATE_HOLDING:
+        rsi_val = check_rsi(df)
+        if rsi_val >= RSI_OVERBOUGHT_THRESHOLD:
+            next_state = STATE_OVERBOUGHT
+    elif curr_state == STATE_OVERBOUGHT:
+        rsi_val = check_rsi(df)
+        if rsi_val < RSI_OVERBOUGHT_THRESHOLD:
+            next_state = STATE_SELL_INDICATED
+    elif curr_state == STATE_SELL_INDICATED:
+        macd_diff_val = check_macd_diff(df)
+        if macd_diff_val < 0:
+            next_state = STATE_SELL
     return next_state
 
 

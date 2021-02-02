@@ -26,13 +26,14 @@ from .data_processing import (
     check_rsi,
 )
 from .utilities import (
-    STATE_DEFAULT,
-    STATE_OVERBOUGHT,
+    STATE_NO_POSITION,
     STATE_OVERSOLD,
-    STATE_SELL_INDICATED,
     STATE_BUY_INDICATED,
-    STATE_SELL,
     STATE_BUY,
+    STATE_HOLDING,
+    STATE_OVERBOUGHT,
+    STATE_SELL_INDICATED,
+    STATE_SELL,
 )
 
 SLEEP_TIME = 30
@@ -47,7 +48,7 @@ class CryptoMonitor(CryptoWorker):
         self.granularity = granularity
         self.last_time = datetime.fromtimestamp(0, tz=timezone.utc)
         self.historical_df = None
-        self.state = STATE_DEFAULT
+        self.state = STATE_NO_POSITION
         self.owned_crypto_balance = Decimal(0)
         self.last_ticker_df = None
 
@@ -114,20 +115,20 @@ class CryptoMonitor(CryptoWorker):
                                     f"of {self.owned_crypto_balance}")
                     else:
                         logger.info(f"{self} is issuing a buy order")
-                        buy_order = BuyOrderRequestMessage(self, self.client, self.product_id)
-                        self.client.add_message_to_priority_queue(buy_order)
-                        self.state = STATE_DEFAULT
+                        buy_order = BuyOrderRequestMessage(self, self.portfolio, self.product_id)
+                        self.portfolio.add_priority_message_to_authenticated_client(buy_order)
+                    self.state = STATE_HOLDING
                 elif next_state == STATE_SELL:
                     if self.owned_crypto_balance.compare(Decimal(0)) == Decimal(0):
                         logger.info(f"{self} does not have any outstanding "
                                     f"crypto to sell")
                     else:
                         logger.info(f"{self} is issuing a sell order")
-                        sell_order = SellOrderRequestMessage(self, self.client, self.product_id)
-                        self.client.add_message_to_priority_queue(sell_order)
-                        self.state = STATE_DEFAULT
+                        sell_order = SellOrderRequestMessage(self, self.portfolio, self.product_id)
+                        self.portfolio.add_priority_message_to_authenticated_client(sell_order)
+                    self.state = STATE_NO_POSITION
                 else:
-                    if next_state != STATE_DEFAULT and next_state != self.state:
+                    if next_state != self.state:
                         logger.info(f"{self} has just entered state {next_state}")
                     self.state = next_state
             elif isinstance(msg, BuyOrderResponseMessage):
