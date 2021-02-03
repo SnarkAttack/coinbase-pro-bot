@@ -10,6 +10,9 @@ class CryptoWorker(threading.Thread):
         self.msg_lock = threading.Lock()
         self.shutdown = False
 
+    def get_name(self):
+        return self.__class__.__name__
+
     def get_thread_name(self):
         return threading.current_thread().getName()
 

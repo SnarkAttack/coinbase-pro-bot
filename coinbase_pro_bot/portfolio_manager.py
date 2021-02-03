@@ -71,4 +71,3 @@ class PortfolioManager(CryptoWorker):
 
     def get_monitor_macd_diff(self):
         return [(monitor.__str__(), monitor.get_current_macd_diff()) for monitor in self.historical_data_monitors]
-        
